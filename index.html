@@ -80,8 +80,10 @@
 
   <script>
     const GLB_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Tube.glb';
-    let scene, camera, renderer, controls, tubeMaterial;
-    let originalTexture = null;
+    let scene, camera, renderer, controls;
+    let bodyMesh = null, detailsMesh = null;
+    let uploadedImage = null;
+    let currentColorHex = '#ffffff';
 
     const container = document.getElementById('canvas-container');
 
@@ -99,10 +101,10 @@
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
       scene.add(ambientLight);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.6);
       mainLight.position.set(5, 8, 5);
       scene.add(mainLight);
 
@@ -112,20 +114,26 @@
 
       new THREE.GLTFLoader().load(GLB_URL, function(gltf) {
         const model = gltf.scene;
-        
+
         model.traverse((child) => {
-          if (child.isLight) {
-            child.visible = false;
-          }
+          if (child.isLight) child.visible = false;
+          
           if (child.isMesh) {
-            tubeMaterial = child.material;
-            originalTexture = tubeMaterial.map;
+            // Разделяем объекты по именам из Blender
+            if (child.name.toLowerCase().includes('body')) {
+              bodyMesh = child;
+            } else {
+              detailsMesh = child;
+            }
           }
         });
 
+        // Центрируем модель в сцене
         const box = new THREE.Box3().setFromObject(model);
         model.position.sub(box.getCenter(new THREE.Vector3()));
+        
         scene.add(model);
+        updateMaterials();
       });
 
       animate();
@@ -137,15 +145,77 @@
       renderer.render(scene, camera);
     }
 
+    // Динамический канвас: охват 270 градусов (75% ширины UV)
+    function generateTexture(img, bgColorHex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2048;
+      canvas.height = 2048;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = bgColorHex;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (img) {
+        const maxW = canvas.width * 0.75;
+        let finalW = maxW;
+        let finalH = img.height * (finalW / img.width);
+
+        const maxH = canvas.height * 0.85;
+        if (finalH > maxH) {
+          finalH = maxH;
+          finalW = img.width * (finalH / img.height);
+        }
+
+        const x = (canvas.width - finalW) / 2;
+        const y = (canvas.height - finalH) / 2;
+
+        ctx.drawImage(img, x, y, finalW, finalH);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    function updateMaterials() {
+      const roughness = 0.3;
+      const metalness = 0.05;
+
+      // 1. Детали (крышка, петли, дно)
+      if (detailsMesh) {
+        detailsMesh.material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(currentColorHex),
+          roughness: roughness,
+          metalness: metalness,
+          side: THREE.DoubleSide
+        });
+      }
+
+      // 2. Тело цилиндра
+      if (bodyMesh) {
+        const bodyTexture = generateTexture(uploadedImage, currentColorHex);
+        bodyMesh.material = new THREE.MeshStandardMaterial({
+          map: bodyTexture,
+          color: 0xffffff,
+          roughness: roughness,
+          metalness: metalness,
+          side: THREE.FrontSide
+        });
+      }
+    }
+
     document.getElementById('palette').addEventListener('click', (e) => {
       const swatch = e.target.closest('.color-swatch');
-      if (!swatch || !tubeMaterial) return;
+      if (!swatch) return;
 
       document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
 
-      const colorHex = swatch.getAttribute('data-color');
-      tubeMaterial.color.setStyle(colorHex);
+      currentColorHex = swatch.getAttribute('data-color');
+      updateMaterials();
     });
 
     document.getElementById('logo-input').addEventListener('change', (e) => {
@@ -157,46 +227,27 @@
         const img = new Image();
         img.src = evt.target.result;
         img.onload = () => {
-          const texture = new THREE.Texture(img);
-          
-          texture.wrapS = THREE.ClampToEdgeWrapping;
-          texture.wrapT = THREE.ClampToEdgeWrapping;
-
-          texture.repeat.set(1.2, -0.65);
-          texture.offset.set(-0.1, 0.82);
-
-          texture.needsUpdate = true;
-          texture.encoding = THREE.sRGBEncoding;
-
-          if (tubeMaterial) {
-            tubeMaterial.map = texture;
-            tubeMaterial.needsUpdate = true;
-          }
+          uploadedImage = img;
+          updateMaterials();
         };
       };
       reader.readAsDataURL(file);
     });
 
     document.getElementById('reset-logo-btn').addEventListener('click', () => {
-      if (tubeMaterial) {
-        tubeMaterial.map = originalTexture;
-        tubeMaterial.needsUpdate = true;
-        document.getElementById('logo-input').value = '';
-      }
+      uploadedImage = null;
+      document.getElementById('logo-input').value = '';
+      updateMaterials();
     });
 
     document.getElementById('copy-btn').addEventListener('click', () => {
       renderer.render(scene, camera);
-      
       try {
         renderer.domElement.toBlob((blob) => {
           if (navigator.clipboard && window.ClipboardItem) {
             const item = new ClipboardItem({ 'image/png': blob });
-            navigator.clipboard.write([item]).then(() => {
-              showToast('Copied to clipboard!');
-            }).catch(() => {
-              downloadFallback();
-            });
+            navigator.clipboard.write([item]).then(() => showToast('Copied to clipboard!'))
+              .catch(() => downloadFallback());
           } else {
             downloadFallback();
           }
