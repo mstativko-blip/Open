@@ -1,234 +1,343 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Configurator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <title>3D Конфигуратор Тубуса</title>
   <style>
-    body { margin: 0; padding: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; }
-    .container { max-width: 900px; margin: 0 auto; box-sizing: border-box; }
-    #canvas-container { width: 100%; height: 420px; background: radial-gradient(circle at center, #ffffff 0%, #e5e5e5 100%); border-radius: 12px; position: relative; cursor: grab; }
-    #canvas-container:active { cursor: grabbing; }
-    
-    .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
-    .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
-    .group { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: #333; }
-    
-    .color-palette { display: flex; gap: 8px; align-items: center; }
-    .color-swatch {
-      width: 28px;
-      height: 28px;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f5f5f7;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #canvas-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #ui-panel {
+      background: #ffffff;
+      border-top: 1px solid #e5e5e5;
+      padding: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+      z-index: 10;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+    }
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       cursor: pointer;
-      border: 2px solid transparent;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-      transition: transform 0.1s ease, border-color 0.1s ease;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
     }
-    .color-swatch:hover { transform: scale(1.1); }
-    .color-swatch.active { border-color: #0071e3; transform: scale(1.15); }
-
-    .btn { background: #111; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 500; font-size: 14px; cursor: pointer; border: none; transition: background 0.2s; }
-    .btn:hover { background: #333; }
-    .btn-secondary { background: #e5e5e5; color: #333; }
-    .btn-secondary:hover { background: #d5d5d5; }
-    .btn-blue { background: #0071e3; }
-    .btn-blue:hover { background: #0077ed; }
-    
-    #logo-input { display: none; }
-    .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; opacity: 0; transition: all 0.3s; pointer-events: none; }
-    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+    .btn {
+      background-color: #0071e3;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn:hover {
+      background-color: #0077ed;
+    }
+    .btn-secondary {
+      background-color: #e8e8ed;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background-color: #dcdce1;
+    }
+    #file-input {
+      display: none;
+    }
+    #toast {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #323232;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #toast.show {
+      opacity: 1;
+    }
   </style>
+
+  <!-- Import Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
-  <div class="container">
-    <div id="canvas-container">
-      <div id="toast" class="toast">Copied to clipboard!</div>
-    </div>
-    
-    <div class="controls">
-      <div class="row">
-        <div class="group">
-          <span>Tube Color:</span>
-          <div class="color-palette" id="palette">
-            <div class="color-swatch active" style="background: #ffffff;" data-color="#ffffff"></div>
-            <div class="color-swatch" style="background: #e63946;" data-color="#e63946"></div>
-            <div class="color-swatch" style="background: #ffb703;" data-color="#ffb703"></div>
-            <div class="color-swatch" style="background: #2a9d8f;" data-color="#2a9d8f"></div>
-            <div class="color-swatch" style="background: #1d3557;" data-color="#1d3557"></div>
-            <div class="color-swatch" style="background: #fb8500;" data-color="#fb8500"></div>
-            <div class="color-swatch" style="background: #111111;" data-color="#111111"></div>
-          </div>
-        </div>
-      </div>
 
-      <div class="row">
-        <div class="group">
-          <label class="btn" for="logo-input">Upload Logo</label>
-          <input type="file" id="logo-input" accept="image/*">
-          <button class="btn btn-secondary" id="reset-logo-btn">Remove Logo</button>
-        </div>
-        
-        <div class="group">
-          <button class="btn btn-blue" id="copy-btn">Copy Image</button>
-        </div>
-      </div>
+  <div id="canvas-container">
+    <div id="toast">Изображение скопировано в буфер обмена!</div>
+  </div>
+
+  <div id="ui-panel">
+    <div class="control-group">
+      <label for="tube-color">Цвет тубуса:</label>
+      <input type="color" id="tube-color" value="#e63946">
     </div>
+
+    <div class="control-group">
+      <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">Загрузить логотип</button>
+      <input type="file" id="file-input" accept="image/*">
+      <button class="btn btn-secondary" id="reset-logo-btn" style="display:none;">Удалить логотип</button>
+    </div>
+
+    <button class="btn" id="copy-btn">Copy Image</button>
   </div>
 
   <script>
-    const GLB_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Tube.glb';
-    let scene, camera, renderer, controls, tubeMaterial;
-    let originalTexture = null;
-
+    // --- СЦЕНА И РЕНДЕРЕР ---
     const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
 
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-      camera.position.set(0, 0, 3.5);
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 25);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.outputEncoding = THREE.sRGBEncoding;
-      container.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
 
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-      scene.add(ambientLight);
+    // --- ОСВЕЩЕНИЕ ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      mainLight.position.set(5, 8, 5);
-      scene.add(mainLight);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight1.position.set(10, 20, 15);
+    scene.add(dirLight1);
 
-      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-      fillLight.position.set(-5, 2, -5);
-      scene.add(fillLight);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+    dirLight2.position.set(-10, -10, -10);
+    scene.add(dirLight2);
 
-      new THREE.GLTFLoader().load(GLB_URL, function(gltf) {
-        const model = gltf.scene;
-        
-        model.traverse((child) => {
-          if (child.isLight) {
-            child.visible = false;
-          }
-          if (child.isMesh) {
-            tubeMaterial = child.material;
-            originalTexture = tubeMaterial.map;
-          }
-        });
+    // --- ГЕОМЕТРИЯ ТУБУСА ---
+    const tubeGroup = new THREE.Group();
+    scene.add(tubeGroup);
 
-        const box = new THREE.Box3().setFromObject(model);
-        model.position.sub(box.getCenter(new THREE.Vector3()));
-        scene.add(model);
-      });
+    const radius = 1.8;
+    const height = 10;
+    const colorInput = document.getElementById('tube-color');
+    let currentColor = new THREE.Color(colorInput.value);
 
-      animate();
+    // 1. Цилиндр (Корпус)
+    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, height, 64, 1, true);
+    
+    // Материал корпуса
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: currentColor,
+      roughness: 0.3,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+    const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    tubeGroup.add(bodyMesh);
+
+    // 2. Дно тубуса (отдельная геометрия без логотипа)
+    const bottomGeometry = new THREE.CircleGeometry(radius, 64);
+    bottomGeometry.rotateX(Math.PI / 2);
+    bottomGeometry.translate(0, -height / 2, 0);
+    const capMaterial = new THREE.MeshStandardMaterial({
+      color: currentColor,
+      roughness: 0.3,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+    const bottomMesh = new THREE.Mesh(bottomGeometry, capMaterial);
+    tubeGroup.add(bottomMesh);
+
+    // 3. Крышка с петлей (отдельная геометрия без логотипа)
+    const capGroup = new THREE.Group();
+    capGroup.position.set(0, height / 2, -radius); // Петля сзади (Z = -radius)
+
+    const capDiscGeo = new THREE.CircleGeometry(radius * 1.05, 64);
+    capDiscGeo.rotateX(-Math.PI / 2);
+    capDiscGeo.translate(0, 0, radius);
+    const capMesh = new THREE.Mesh(capDiscGeo, capMaterial);
+    capGroup.add(capMesh);
+
+    // Петля / крепление
+    const hingeGeo = new THREE.BoxGeometry(0.6, 0.2, 0.4);
+    hingeGeo.translate(0, 0, 0.2);
+    const hingeMesh = new THREE.Mesh(hingeGeo, capMaterial);
+    capGroup.add(hingeMesh);
+
+    // Приоткрываем крышку
+    capGroup.rotation.x = -Math.PI / 6;
+    tubeGroup.add(capGroup);
+
+    // Поворачиваем тубус так, чтобы фасад (обратная сторона от петли) смотрел в камеру
+    tubeGroup.rotation.y = 0;
+
+    // --- ОБРАБОТКА ЛОГОТИПА ---
+    let loadedImage = null;
+
+    function createLogoTexture(img) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Высокая детализация канваса
+      canvas.width = 2048;
+      canvas.height = 2048;
+
+      // Фон цвета тубуса
+      ctx.fillStyle = colorInput.value;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (img) {
+        // Логотип занимает ~2/3 высоты (66% от высоты корпуса)
+        const targetHeight = canvas.height * 0.66;
+        const scale = targetHeight / img.height;
+        const targetWidth = img.width * scale;
+
+        // Помещаем логотип по центру лицевой стороны
+        // Для развертки цилиндра Three.js лицевая сторона находится в районе 75% ширины развертки (X)
+        const x = (canvas.width * 0.75) - (targetWidth / 2);
+        const y = (canvas.height - targetHeight) / 2;
+
+        ctx.drawImage(img, x, y, targetWidth, targetHeight);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      return texture;
     }
 
+    function updateMaterials() {
+      const color = new THREE.Color(colorInput.value);
+      capMaterial.color = color;
+
+      if (loadedImage) {
+        bodyMaterial.map = createLogoTexture(loadedImage);
+        bodyMaterial.color = new THREE.Color(0xffffff); // Белный базовый цвет для корректной передачи текстуры
+      } else {
+        bodyMaterial.map = null;
+        bodyMaterial.color = color;
+      }
+      bodyMaterial.needsUpdate = true;
+    }
+
+    // Изменение цвета
+    colorInput.addEventListener('input', updateMaterials);
+
+    // Загрузка файла
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+            loadedImage = img;
+            document.getElementById('reset-logo-btn').style.display = 'inline-block';
+            updateMaterials();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Сброс логотипа
+    document.getElementById('reset-logo-btn').addEventListener('click', function() {
+      loadedImage = null;
+      document.getElementById('file-input').value = '';
+      this.style.display = 'none';
+      updateMaterials();
+    });
+
+    // --- КНОПКА COPY IMAGE ---
+    document.getElementById('copy-btn').addEventListener('click', async () => {
+      renderer.render(scene, camera);
+      renderer.domElement.toBlob(async (blob) => {
+        try {
+          const item = new ClipboardItem({ 'image/png': blob });
+          await navigator.clipboard.write([item]);
+          showToast('Изображение скопировано в буфер обмена!');
+        } catch (err) {
+          showToast('Ошибка копирования. Используйте HTTPS.');
+          console.error(err);
+        }
+      });
+    });
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // --- АНИМАЦИЯ И РЕСАЙЗ ---
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     }
-
-    document.getElementById('palette').addEventListener('click', (e) => {
-      const swatch = e.target.closest('.color-swatch');
-      if (!swatch || !tubeMaterial) return;
-
-      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-
-      const colorHex = swatch.getAttribute('data-color');
-      tubeMaterial.color.setStyle(colorHex);
-    });
-
-    document.getElementById('logo-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const img = new Image();
-        img.src = evt.target.result;
-        img.onload = () => {
-          const texture = new THREE.Texture(img);
-          
-          texture.wrapS = THREE.ClampToEdgeWrapping;
-          texture.wrapT = THREE.ClampToEdgeWrapping;
-
-          texture.repeat.set(1.2, -0.65);
-          texture.offset.set(-0.1, 0.82);
-
-          texture.needsUpdate = true;
-          texture.encoding = THREE.sRGBEncoding;
-
-          if (tubeMaterial) {
-            tubeMaterial.map = texture;
-            tubeMaterial.needsUpdate = true;
-          }
-        };
-      };
-      reader.readAsDataURL(file);
-    });
-
-    document.getElementById('reset-logo-btn').addEventListener('click', () => {
-      if (tubeMaterial) {
-        tubeMaterial.map = originalTexture;
-        tubeMaterial.needsUpdate = true;
-        document.getElementById('logo-input').value = '';
-      }
-    });
-
-    document.getElementById('copy-btn').addEventListener('click', () => {
-      renderer.render(scene, camera);
-      
-      try {
-        renderer.domElement.toBlob((blob) => {
-          if (navigator.clipboard && window.ClipboardItem) {
-            const item = new ClipboardItem({ 'image/png': blob });
-            navigator.clipboard.write([item]).then(() => {
-              showToast('Copied to clipboard!');
-            }).catch(() => {
-              downloadFallback();
-            });
-          } else {
-            downloadFallback();
-          }
-        });
-      } catch (e) {
-        downloadFallback();
-      }
-    });
-
-    function downloadFallback() {
-      const link = document.createElement('a');
-      link.download = 'tube-config.png';
-      link.href = renderer.domElement.toDataURL('image/png');
-      link.click();
-      showToast('Image downloaded!');
-    }
-
-    function showToast(message) {
-      const t = document.getElementById('toast');
-      t.innerText = message;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2000);
-    }
+    animate();
 
     window.addEventListener('resize', () => {
-      if (!container) return;
       camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(container.clientWidth, container.clientHeight);
     });
-
-    init();
   </script>
 </body>
 </html>
