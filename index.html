@@ -93,11 +93,11 @@
   </div>
 
   <script>
-    const BODY_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Body.glb';
-    const DETAILS_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Details.glb';
+    const BODY_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/main/Body.glb';
+    const DETAILS_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/main/Details.glb';
 
     let scene, camera, renderer, controls;
-    let bodyMaterial = null, detailsMaterial = null;
+    let bodyMeshObj = null, detailsMeshObj = null;
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
 
@@ -111,47 +111,37 @@
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      
+      // Точная передача цвета без оверлея
       renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.NoToneMapping;
       renderer.setClearColor(0x000000, 0);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      // Мягкий бестеневой свет для точного сохранения оригинальных цветов логотипа
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
       scene.add(ambientLight);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.4);
       mainLight.position.set(5, 8, 5);
       scene.add(mainLight);
 
-      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-      fillLight.position.set(-5, 2, -5);
-      scene.add(fillLight);
-
       const loader = new THREE.GLTFLoader();
 
-      // Загружаем Body
+      // Загружаем строго только Body.glb
       loader.load(BODY_URL, function(gltf) {
-        const bodyMesh = gltf.scene;
-        bodyMesh.traverse((child) => {
-          if (child.isMesh) {
-            bodyMaterial = child.material;
-          }
-        });
-        scene.add(bodyMesh);
+        bodyMeshObj = gltf.scene;
+        scene.add(bodyMeshObj);
         updateMaterials();
       });
 
-      // Загружаем Details
+      // Загружаем строго только Details.glb
       loader.load(DETAILS_URL, function(gltf) {
-        const detailsMesh = gltf.scene;
-        detailsMesh.traverse((child) => {
-          if (child.isMesh) {
-            detailsMaterial = child.material;
-          }
-        });
-        scene.add(detailsMesh);
+        detailsMeshObj = gltf.scene;
+        scene.add(detailsMeshObj);
         updateMaterials();
       });
 
@@ -164,25 +154,24 @@
       renderer.render(scene, camera);
     }
 
-    // Генерируем текстуру с лого строго по центру ровной UV-развертки Body
     function generateTexture(img, bgColorHex) {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
       canvas.height = 2048;
       const ctx = canvas.getContext('2d');
 
+      // Заливаем фоновый цвет тубуса
       ctx.fillStyle = bgColorHex;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       if (img) {
-        // Логотип занимает до 60% высоты цилиндра
-        const targetH = canvas.height * 0.6;
+        // Ограничиваем размер лого, чтобы оно сидело ровно по центру фасада цилиндра
+        const targetH = canvas.height * 0.45; 
         const scale = targetH / img.height;
         let finalW = img.width * scale;
         let finalH = targetH;
 
-        // Ограничиваем ширину, чтобы лого не уходило в боковые швы
-        const maxW = canvas.width * 0.4;
+        const maxW = canvas.width * 0.35;
         if (finalW > maxW) {
           finalW = maxW;
           finalH = img.height * (finalW / img.width);
@@ -191,31 +180,49 @@
         const x = (canvas.width - finalW) / 2;
         const y = (canvas.height - finalH) / 2;
 
+        // Рисуем картинку ровно 1 в 1
         ctx.drawImage(img, x, y, finalW, finalH);
       }
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.encoding = THREE.sRGBEncoding;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.needsUpdate = true;
       return texture;
     }
 
     function updateMaterials() {
-      // Обновляем крышку и донышко (просто сплошной цвет)
-      if (detailsMaterial) {
-        detailsMaterial.color.setStyle(currentColorHex);
-        detailsMaterial.needsUpdate = true;
+      // 1. Детали (крышка, донышко) — только сплошной цвет, никаких текстур!
+      if (detailsMeshObj) {
+        detailsMeshObj.traverse((child) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: new THREE.Color(currentColorHex),
+              roughness: 0.3,
+              metalness: 0.1
+            });
+          }
+        });
       }
 
-      // Обновляем тело (текстура с лого или фоновый цвет)
-      if (bodyMaterial) {
-        const newTexture = generateTexture(uploadedImage, currentColorHex);
-        bodyMaterial.map = newTexture;
-        bodyMaterial.color.setStyle('#ffffff'); // Сбрасываем tint, так как цвет уже залит в канвас
-        bodyMaterial.needsUpdate = true;
+      // 2. Тело (цилиндр) — генерируемая текстура с чистым логотипом
+      if (bodyMeshObj) {
+        const bodyTexture = generateTexture(uploadedImage, currentColorHex);
+        bodyMeshObj.traverse((child) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshStandardMaterial({
+              map: bodyTexture,
+              color: 0xffffff, // Белый базис, чтобы цвет с текстуры читался на 100% точно
+              roughness: 0.3,
+              metalness: 0.1
+            });
+          }
+        });
       }
     }
 
-    // Выбор цвета из палитры
+    // Палитра цветов
     document.getElementById('palette').addEventListener('click', (e) => {
       const swatch = e.target.closest('.color-swatch');
       if (!swatch) return;
@@ -227,7 +234,7 @@
       updateMaterials();
     });
 
-    // Загрузка логотипа
+    // Загрузка файла
     document.getElementById('logo-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -244,14 +251,14 @@
       reader.readAsDataURL(file);
     });
 
-    // Сброс логотипа
+    // Удаление логотипа
     document.getElementById('reset-logo-btn').addEventListener('click', () => {
       uploadedImage = null;
       document.getElementById('logo-input').value = '';
       updateMaterials();
     });
 
-    // Экспорт / Копирование
+    // Копирование в буфер
     document.getElementById('copy-btn').addEventListener('click', () => {
       renderer.render(scene, camera);
       try {
