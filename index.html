@@ -8,26 +8,12 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { 
-      margin: 0; 
-      padding: 10px; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-      background: transparent; 
-      overflow: hidden;
-    }
-    .container { max-width: 900px; margin: 0 auto; }
-    
-    #canvas-container { 
-      width: 100%; 
-      height: 440px; 
-      background: transparent; 
-      position: relative; 
-      cursor: grab; 
-    }
+    body { margin: 0; padding: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; }
+    .container { max-width: 900px; margin: 0 auto; box-sizing: border-box; }
+    #canvas-container { width: 100%; height: 420px; background: radial-gradient(circle at center, #ffffff 0%, #e5e5e5 100%); border-radius: 12px; position: relative; cursor: grab; }
     #canvas-container:active { cursor: grabbing; }
     
-    .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; }
+    .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
     .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
     .group { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: #333; }
     
@@ -38,7 +24,7 @@
       border-radius: 50%;
       cursor: pointer;
       border: 2px solid transparent;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
       transition: transform 0.1s ease, border-color 0.1s ease;
     }
     .color-swatch:hover { transform: scale(1.1); }
@@ -52,7 +38,7 @@
     .btn-blue:hover { background: #0077ed; }
     
     #logo-input { display: none; }
-    .toast { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; opacity: 0; transition: all 0.3s; pointer-events: none; }
+    .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; opacity: 0; transition: all 0.3s; pointer-events: none; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   </style>
 </head>
@@ -93,13 +79,9 @@
   </div>
 
   <script>
-    const BODY_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/main/Body.glb';
-    const DETAILS_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/main/Details.glb';
-
-    let scene, camera, renderer, controls;
-    let bodyMeshObj = null, detailsMeshObj = null;
-    let uploadedImage = null;
-    let currentColorHex = '#ffffff';
+    const GLB_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Tube.glb';
+    let scene, camera, renderer, controls, tubeMaterial;
+    let originalTexture = null;
 
     const container = document.getElementById('canvas-container');
 
@@ -111,34 +93,39 @@
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      
       renderer.outputEncoding = THREE.sRGBEncoding;
-      renderer.toneMapping = THREE.NoToneMapping;
-      renderer.setClearColor(0x000000, 0);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
       scene.add(ambientLight);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
       mainLight.position.set(5, 8, 5);
       scene.add(mainLight);
 
-      const loader = new THREE.GLTFLoader();
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      fillLight.position.set(-5, 2, -5);
+      scene.add(fillLight);
 
-      loader.load(BODY_URL, function(gltf) {
-        bodyMeshObj = gltf.scene;
-        scene.add(bodyMeshObj);
-        updateMaterials();
-      });
+      new THREE.GLTFLoader().load(GLB_URL, function(gltf) {
+        const model = gltf.scene;
+        
+        model.traverse((child) => {
+          if (child.isLight) {
+            child.visible = false;
+          }
+          if (child.isMesh) {
+            tubeMaterial = child.material;
+            originalTexture = tubeMaterial.map;
+          }
+        });
 
-      loader.load(DETAILS_URL, function(gltf) {
-        detailsMeshObj = gltf.scene;
-        scene.add(detailsMeshObj);
-        updateMaterials();
+        const box = new THREE.Box3().setFromObject(model);
+        model.position.sub(box.getCenter(new THREE.Vector3()));
+        scene.add(model);
       });
 
       animate();
@@ -150,91 +137,15 @@
       renderer.render(scene, camera);
     }
 
-    // Генерация текстуры 270 градусов (75% ширины развертки) без переворота
-    function generateTexture(img, bgColorHex) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 2048;
-      canvas.height = 2048;
-      const ctx = canvas.getContext('2d');
-
-      ctx.fillStyle = bgColorHex;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      if (img) {
-        // Ограничиваем ширину 75% от всей развертки (эквивалент 270 градусов окружности)
-        const maxW = canvas.width * 0.75;
-        let finalW = maxW;
-        let finalH = img.height * (finalW / img.width);
-
-        // Если по высоте картинка выходит за рамки, масштабируем по высоте
-        const maxH = canvas.height * 0.85;
-        if (finalH > maxH) {
-          finalH = maxH;
-          finalW = img.width * (finalH / img.height);
-        }
-
-        // Центрируем по Х и Y
-        const x = (canvas.width - finalW) / 2;
-        const y = (canvas.height - finalH) / 2;
-
-        ctx.drawImage(img, x, y, finalW, finalH);
-      }
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.encoding = THREE.sRGBEncoding;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      
-      // Отменяем вертикальный переворот Three.js, если текстура ложится вверх ногами
-      texture.flipY = false;
-      
-      texture.needsUpdate = true;
-      return texture;
-    }
-
-    function updateMaterials() {
-      const commonRoughness = 0.3;
-      const commonMetalness = 0.05;
-
-      // 1. Детали (крышка и дно)
-      if (detailsMeshObj) {
-        detailsMeshObj.traverse((child) => {
-          if (child.isMesh) {
-            child.material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(currentColorHex),
-              roughness: commonRoughness,
-              metalness: commonMetalness
-            });
-          }
-        });
-      }
-
-      // 2. Тело цилиндра
-      if (bodyMeshObj) {
-        const bodyTexture = generateTexture(uploadedImage, currentColorHex);
-        bodyMeshObj.traverse((child) => {
-          if (child.isMesh) {
-            child.material = new THREE.MeshStandardMaterial({
-              map: bodyTexture,
-              color: 0xffffff,
-              roughness: commonRoughness,
-              metalness: commonMetalness
-            });
-          }
-        });
-      }
-    }
-
-    // События
     document.getElementById('palette').addEventListener('click', (e) => {
       const swatch = e.target.closest('.color-swatch');
-      if (!swatch) return;
+      if (!swatch || !tubeMaterial) return;
 
       document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
 
-      currentColorHex = swatch.getAttribute('data-color');
-      updateMaterials();
+      const colorHex = swatch.getAttribute('data-color');
+      tubeMaterial.color.setStyle(colorHex);
     });
 
     document.getElementById('logo-input').addEventListener('change', (e) => {
@@ -246,27 +157,46 @@
         const img = new Image();
         img.src = evt.target.result;
         img.onload = () => {
-          uploadedImage = img;
-          updateMaterials();
+          const texture = new THREE.Texture(img);
+          
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+
+          texture.repeat.set(1.2, -0.65);
+          texture.offset.set(-0.1, 0.82);
+
+          texture.needsUpdate = true;
+          texture.encoding = THREE.sRGBEncoding;
+
+          if (tubeMaterial) {
+            tubeMaterial.map = texture;
+            tubeMaterial.needsUpdate = true;
+          }
         };
       };
       reader.readAsDataURL(file);
     });
 
     document.getElementById('reset-logo-btn').addEventListener('click', () => {
-      uploadedImage = null;
-      document.getElementById('logo-input').value = '';
-      updateMaterials();
+      if (tubeMaterial) {
+        tubeMaterial.map = originalTexture;
+        tubeMaterial.needsUpdate = true;
+        document.getElementById('logo-input').value = '';
+      }
     });
 
     document.getElementById('copy-btn').addEventListener('click', () => {
       renderer.render(scene, camera);
+      
       try {
         renderer.domElement.toBlob((blob) => {
           if (navigator.clipboard && window.ClipboardItem) {
             const item = new ClipboardItem({ 'image/png': blob });
-            navigator.clipboard.write([item]).then(() => showToast('Copied to clipboard!'))
-              .catch(() => downloadFallback());
+            navigator.clipboard.write([item]).then(() => {
+              showToast('Copied to clipboard!');
+            }).catch(() => {
+              downloadFallback();
+            });
           } else {
             downloadFallback();
           }
