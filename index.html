@@ -81,7 +81,7 @@
   <script>
     const GLB_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Tube.glb';
     let scene, camera, renderer, controls;
-    let bodyMesh = null, detailsMesh = null;
+    let loadedModel = null;
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
 
@@ -113,26 +113,18 @@
       scene.add(fillLight);
 
       new THREE.GLTFLoader().load(GLB_URL, function(gltf) {
-        const model = gltf.scene;
+        loadedModel = gltf.scene;
 
-        model.traverse((child) => {
+        // Выключаем встроенный свет из Blender
+        loadedModel.traverse((child) => {
           if (child.isLight) child.visible = false;
-          
-          if (child.isMesh) {
-            // Разделяем объекты по именам из Blender
-            if (child.name.toLowerCase().includes('body')) {
-              bodyMesh = child;
-            } else {
-              detailsMesh = child;
-            }
-          }
         });
 
-        // Центрируем модель в сцене
-        const box = new THREE.Box3().setFromObject(model);
-        model.position.sub(box.getCenter(new THREE.Vector3()));
+        // Центрируем модель
+        const box = new THREE.Box3().setFromObject(loadedModel);
+        loadedModel.position.sub(box.getCenter(new THREE.Vector3()));
         
-        scene.add(model);
+        scene.add(loadedModel);
         updateMaterials();
       });
 
@@ -145,7 +137,6 @@
       renderer.render(scene, camera);
     }
 
-    // Динамический канвас: охват 270 градусов (75% ширины UV)
     function generateTexture(img, bgColorHex) {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
@@ -181,30 +172,23 @@
     }
 
     function updateMaterials() {
-      const roughness = 0.3;
-      const metalness = 0.05;
+      if (!loadedModel) return;
 
-      // 1. Детали (крышка, петли, дно)
-      if (detailsMesh) {
-        detailsMesh.material = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(currentColorHex),
-          roughness: roughness,
-          metalness: metalness,
-          side: THREE.DoubleSide
-        });
-      }
+      const dynamicTexture = generateTexture(uploadedImage, currentColorHex);
+      const sharedMaterial = new THREE.MeshStandardMaterial({
+        map: dynamicTexture,
+        color: 0xffffff,
+        roughness: 0.3,
+        metalness: 0.05,
+        side: THREE.DoubleSide
+      });
 
-      // 2. Тело цилиндра
-      if (bodyMesh) {
-        const bodyTexture = generateTexture(uploadedImage, currentColorHex);
-        bodyMesh.material = new THREE.MeshStandardMaterial({
-          map: bodyTexture,
-          color: 0xffffff,
-          roughness: roughness,
-          metalness: metalness,
-          side: THREE.FrontSide
-        });
-      }
+      // Применяем материал абсолютно ко всем мешам внутри единого GLB
+      loadedModel.traverse((child) => {
+        if (child.isMesh) {
+          child.material = sharedMaterial;
+        }
+      });
     }
 
     document.getElementById('palette').addEventListener('click', (e) => {
