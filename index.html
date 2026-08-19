@@ -8,26 +8,12 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { 
-      margin: 0; 
-      padding: 10px; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-      background: transparent; 
-      overflow: hidden;
-    }
-    .container { max-width: 900px; margin: 0 auto; }
-    
-    #canvas-container { 
-      width: 100%; 
-      height: 440px; 
-      background: transparent; 
-      position: relative; 
-      cursor: grab; 
-    }
+    body { margin: 0; padding: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; }
+    .container { max-width: 900px; margin: 0 auto; box-sizing: border-box; }
+    #canvas-container { width: 100%; height: 420px; background: radial-gradient(circle at center, #ffffff 0%, #e5e5e5 100%); border-radius: 12px; position: relative; cursor: grab; }
     #canvas-container:active { cursor: grabbing; }
     
-    .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; }
+    .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
     .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
     .group { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: #333; }
     
@@ -38,7 +24,7 @@
       border-radius: 50%;
       cursor: pointer;
       border: 2px solid transparent;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
       transition: transform 0.1s ease, border-color 0.1s ease;
     }
     .color-swatch:hover { transform: scale(1.1); }
@@ -52,7 +38,7 @@
     .btn-blue:hover { background: #0077ed; }
     
     #logo-input { display: none; }
-    .toast { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; opacity: 0; transition: all 0.3s; pointer-events: none; }
+    .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; opacity: 0; transition: all 0.3s; pointer-events: none; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   </style>
 </head>
@@ -96,8 +82,6 @@
     const GLB_URL = 'https://raw.githubusercontent.com/mstativko-blip/Open/refs/heads/main/Tube.glb';
     let scene, camera, renderer, controls, tubeMaterial;
     let originalTexture = null;
-    let uploadedImage = null;
-    let currentColorHex = '#ffffff';
 
     const container = document.getElementById('canvas-container');
 
@@ -110,7 +94,6 @@
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputEncoding = THREE.sRGBEncoding;
-      renderer.setClearColor(0x000000, 0);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -131,7 +114,9 @@
         const model = gltf.scene;
         
         model.traverse((child) => {
-          if (child.isLight) child.visible = false;
+          if (child.isLight) {
+            child.visible = false;
+          }
           if (child.isMesh) {
             tubeMaterial = child.material;
             originalTexture = tubeMaterial.map;
@@ -152,69 +137,17 @@
       renderer.render(scene, camera);
     }
 
-    // Генерация наклейки строго на переднюю стенку (50% ширины UV-развертки)
-    function generateFrontStickerTexture(img, bgColorHex) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 2048;
-      canvas.height = 2048;
-      const ctx = canvas.getContext('2d');
-
-      // Фоновая заливка цветом тубуса
-      ctx.fillStyle = bgColorHex;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      if (img) {
-        // Высота логотипа — 2/3 от высоты тубуса
-        const targetH = canvas.height * 0.66;
-        const scale = targetH / img.height;
-        const targetW = img.width * scale;
-
-        // Позиционируем строго в центре передней половины (25%-75% ширины канваса)
-        const frontSectorWidth = canvas.width * 0.5;
-        const frontSectorLeft = canvas.width * 0.25;
-
-        // Корректируем ширину, если лого слишком широкое для передней полусферы
-        const finalW = Math.min(targetW, frontSectorWidth * 0.9);
-        const finalH = img.height * (finalW / img.width);
-
-        const x = frontSectorLeft + (frontSectorWidth - finalW) / 2;
-        const y = (canvas.height - finalH) / 2;
-
-        ctx.drawImage(img, x, y, finalW, finalH);
-      }
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.encoding = THREE.sRGBEncoding;
-      return texture;
-    }
-
-    function updateMaterialTexture() {
-      if (!tubeMaterial) return;
-      
-      if (uploadedImage) {
-        const newTexture = generateFrontStickerTexture(uploadedImage, currentColorHex);
-        tubeMaterial.map = newTexture;
-        tubeMaterial.color.setStyle('#ffffff'); // Белый фильтр для точной передачи цвета текстуры
-      } else {
-        tubeMaterial.map = originalTexture;
-        tubeMaterial.color.setStyle(currentColorHex);
-      }
-      tubeMaterial.needsUpdate = true;
-    }
-
-    // Изменение цвета
     document.getElementById('palette').addEventListener('click', (e) => {
       const swatch = e.target.closest('.color-swatch');
-      if (!swatch) return;
+      if (!swatch || !tubeMaterial) return;
 
       document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
 
-      currentColorHex = swatch.getAttribute('data-color');
-      updateMaterialTexture();
+      const colorHex = swatch.getAttribute('data-color');
+      tubeMaterial.color.setStyle(colorHex);
     });
 
-    // Загрузка логотипа
     document.getElementById('logo-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -224,29 +157,46 @@
         const img = new Image();
         img.src = evt.target.result;
         img.onload = () => {
-          uploadedImage = img;
-          updateMaterialTexture();
+          const texture = new THREE.Texture(img);
+          
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+
+          texture.repeat.set(1.2, -0.65);
+          texture.offset.set(-0.1, 0.82);
+
+          texture.needsUpdate = true;
+          texture.encoding = THREE.sRGBEncoding;
+
+          if (tubeMaterial) {
+            tubeMaterial.map = texture;
+            tubeMaterial.needsUpdate = true;
+          }
         };
       };
       reader.readAsDataURL(file);
     });
 
-    // Сброс логотипа
     document.getElementById('reset-logo-btn').addEventListener('click', () => {
-      uploadedImage = null;
-      document.getElementById('logo-input').value = '';
-      updateMaterialTexture();
+      if (tubeMaterial) {
+        tubeMaterial.map = originalTexture;
+        tubeMaterial.needsUpdate = true;
+        document.getElementById('logo-input').value = '';
+      }
     });
 
-    // Экспорт изображения
     document.getElementById('copy-btn').addEventListener('click', () => {
       renderer.render(scene, camera);
+      
       try {
         renderer.domElement.toBlob((blob) => {
           if (navigator.clipboard && window.ClipboardItem) {
             const item = new ClipboardItem({ 'image/png': blob });
-            navigator.clipboard.write([item]).then(() => showToast('Copied to clipboard!'))
-              .catch(() => downloadFallback());
+            navigator.clipboard.write([item]).then(() => {
+              showToast('Copied to clipboard!');
+            }).catch(() => {
+              downloadFallback();
+            });
           } else {
             downloadFallback();
           }
