@@ -114,6 +114,7 @@
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
 
+    // 1. Текстура ИСКЛЮЧИТЕЛЬНО для Body
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 2048;
@@ -122,10 +123,16 @@
     const bodyTexture = new THREE.CanvasTexture(canvas);
     bodyTexture.colorSpace = THREE.SRGBColorSpace;
     bodyTexture.flipY = false;
-    bodyTexture.wrapS = THREE.ClampToEdgeWrapping;
-    bodyTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    // Изолированный чистый материал для Details
+    // Материал для Body
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      map: bodyTexture,
+      roughness: 0.25,
+      metalness: 0.0,
+      side: THREE.FrontSide
+    });
+
+    // 2. ИЗОЛИРОВАННЫЙ чистый материал для Details (никаких карт вообще!)
     const detailsMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(currentColorHex),
       roughness: 0.25,
@@ -172,24 +179,21 @@
       backLight.position.set(0, -6, -5);
       scene.add(backLight);
 
-      // Models Loader
       const loader = new THREE.GLTFLoader();
 
-      // Загрузка Body
+      // Загрузка Body — только ему отдаем Canvas
       loader.load('Body.glb', (gltf) => {
         bodyMesh = gltf.scene;
         bodyMesh.traverse((child) => {
           if (child.isMesh) {
-            child.material.map = bodyTexture;
-            child.material.side = THREE.DoubleSide;
-            child.material.needsUpdate = true;
+            child.material = bodyMaterial;
           }
         });
         scene.add(bodyMesh);
         updateCanvasTexture();
       });
 
-      // Загрузка Details (чистый цвет, без карт)
+      // Загрузка Details — ЖЕСТКО назначаем сплошной цвет без текстурной карты
       loader.load('Details.glb', (gltf) => {
         detailsMesh = gltf.scene;
         detailsMesh.traverse((child) => {
