@@ -9,47 +9,78 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: #f4f4f4;
     }
     #canvas-container {
       width: 100vw;
       height: 100vh;
     }
-    #controls {
+    #ui-panel {
       position: absolute;
-      bottom: 20px;
+      bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 12px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 12px 20px;
-      border-radius: 30px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      flex-direction: column;
       align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
+      padding: 16px 24px;
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
       z-index: 10;
     }
-    input[type="color"] {
-      border: none;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      cursor: pointer;
+    .color-palette {
+      display: flex;
+      gap: 10px;
     }
-    .file-label {
+    .color-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .color-btn:hover {
+      transform: scale(1.15);
+    }
+    .color-btn.active {
+      outline: 2px solid #007bff;
+      outline-offset: 2px;
+    }
+    .actions-row {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
       background: #007bff;
       color: #fff;
-      padding: 8px 16px;
-      border-radius: 20px;
+      padding: 8px 14px;
+      border-radius: 12px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      transition: background 0.15s ease;
+    }
+    .btn:hover {
+      background: #0056b3;
+    }
+    .btn-secondary {
+      background: #e9ecef;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background: #dee2e6;
     }
     input[type="file"] {
       display: none;
     }
   </style>
-  <!-- Three.js и зависимостей -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -58,11 +89,24 @@
 
   <div id="canvas-container"></div>
 
-  <div id="controls">
-    <label for="colorPicker">Цвет:</label>
-    <input type="color" id="colorPicker" value="#ffffff">
-    <label class="file-label" for="imageLoader">Загрузить логотип</label>
-    <input type="file" id="imageLoader" accept="image/*">
+  <div id="ui-panel">
+    <!-- 6 Предустановленных цветов -->
+    <div class="color-palette">
+      <div class="color-btn active" style="background-color: #ffffff;" data-color="#ffffff"></div>
+      <div class="color-btn" style="background-color: #111111;" data-color="#111111"></div>
+      <div class="color-btn" style="background-color: #e63946;" data-color="#e63946"></div>
+      <div class="color-btn" style="background-color: #ffb703;" data-color="#ffb703"></div>
+      <div class="color-btn" style="background-color: #2a9d8f;" data-color="#2a9d8f"></div>
+      <div class="color-btn" style="background-color: #f4a261;" data-color="#f4a261"></div>
+    </div>
+
+    <!-- Кнопки управления -->
+    <div class="actions-row">
+      <label class="btn" for="imageLoader">Загрузить логотип</label>
+      <input type="file" id="imageLoader" accept="image/*">
+      <button class="btn btn-secondary" id="removeLogoBtn">Убрать логотип</button>
+      <button class="btn btn-secondary" id="screenshotBtn">Сделать фото</button>
+    </div>
   </div>
 
   <script>
@@ -77,15 +121,13 @@
     function init() {
       const container = document.getElementById('canvas-container');
 
-      // 1. Сцена и Камера
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0xf4f4f4);
 
       camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
       camera.position.set(0, 0, 8);
 
-      // 2. Рендерер и сочные настройки тона/цвета
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -93,12 +135,11 @@
       renderer.toneMappingExposure = 1.1;
       container.appendChild(renderer.domElement);
 
-      // 3. Управление камерой
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
 
-      // 4. Мягкое бестеневое студийное освещение
+      // Наш студийный свет
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
       scene.add(ambientLight);
 
@@ -114,7 +155,7 @@
       backLight.position.set(0, -6, -5);
       scene.add(backLight);
 
-      // 5. Загрузка 3D-моделей
+      // Загрузка моделей
       const loader = new THREE.GLTFLoader();
 
       loader.load('Body.glb', (gltf) => {
@@ -129,12 +170,17 @@
         updateMaterials();
       });
 
-      // 6. Обработчики событий
-      document.getElementById('colorPicker').addEventListener('input', (e) => {
-        currentColorHex = e.target.value;
-        updateMaterials();
+      // Переключение цветов
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          currentColorHex = e.target.getAttribute('data-color');
+          updateMaterials();
+        });
       });
 
+      // Загрузка логотипа
       document.getElementById('imageLoader').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -151,11 +197,28 @@
         }
       });
 
+      // Удаление логотипа
+      document.getElementById('removeLogoBtn').addEventListener('click', () => {
+        uploadedImage = null;
+        document.getElementById('imageLoader').value = '';
+        updateMaterials();
+      });
+
+      // Снимок экрана
+      document.getElementById('screenshotBtn').addEventListener('click', () => {
+        renderer.render(scene, camera);
+        const dataURL = renderer.domElement.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = 'tobe-tube-custom.png';
+        link.href = dataURL;
+        link.click();
+      });
+
       window.addEventListener('resize', onWindowResize);
       animate();
     }
 
-    // Генерация динамической текстуры с логотипом
+    // Генерация текстуры с заливкой и логотипом
     function generateTexture(image, colorHex) {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
@@ -167,11 +230,11 @@
 
       if (image) {
         const imgAspect = image.width / image.height;
-        let drawWidth = canvas.width * 0.55; 
+        let drawWidth = canvas.width * 0.5;
         let drawHeight = drawWidth / imgAspect;
 
-        if (drawHeight > canvas.height * 0.55) {
-          drawHeight = canvas.height * 0.55;
+        if (drawHeight > canvas.height * 0.5) {
+          drawHeight = canvas.height * 0.5;
           drawWidth = drawHeight * imgAspect;
         }
 
@@ -184,9 +247,6 @@
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.flipY = false;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-
       return texture;
     }
 
@@ -200,7 +260,7 @@
               map: dynamicTexture,
               roughness: 0.35,
               metalness: 0.05,
-              side: THREE.FrontSide
+              side: THREE.DoubleSide
             });
             child.material.needsUpdate = true;
           }
