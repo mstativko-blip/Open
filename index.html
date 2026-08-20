@@ -114,7 +114,6 @@
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
 
-    // Создаем Canvas ТОЛЬКО для Body
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 2048;
@@ -123,8 +122,11 @@
     const bodyTexture = new THREE.CanvasTexture(canvas);
     bodyTexture.colorSpace = THREE.SRGBColorSpace;
     bodyTexture.flipY = false;
+    
+    // Запрещаем текстуре таплиться / повторяться по краям
+    bodyTexture.wrapS = THREE.ClampToEdgeWrapping;
+    bodyTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    // Изолированный материал для деталей (без текстурных карт вообще)
     const detailsMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(currentColorHex),
       roughness: 0.35,
@@ -174,7 +176,6 @@
       // Models Loader
       const loader = new THREE.GLTFLoader();
 
-      // Загружаем Body (только сюда идет текстура с лого)
       loader.load('Body.glb', (gltf) => {
         bodyMesh = gltf.scene;
         bodyMesh.traverse((child) => {
@@ -188,7 +189,6 @@
         updateCanvasTexture();
       });
 
-      // Загружаем Details (строго без логотипа)
       loader.load('Details.glb', (gltf) => {
         detailsMesh = gltf.scene;
         detailsMesh.traverse((child) => {
@@ -207,9 +207,7 @@
           e.target.classList.add('active');
           currentColorHex = e.target.getAttribute('data-color');
           
-          // Обновляем цвет чистых деталей
           detailsMaterial.color.set(currentColorHex);
-          
           updateCanvasTexture();
         });
       });
@@ -261,21 +259,23 @@
     }
 
     function updateCanvasTexture() {
-      // Заливаем фон Body цветом
+      // Полная заливка Canvas фоновым цветом
       ctx.fillStyle = currentColorHex;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Рисуем логотип ровно без переворотов
       if (uploadedImage) {
         const imgAspect = uploadedImage.width / uploadedImage.height;
-        let drawWidth = canvas.width * 0.45;
+        
+        // Масштабируем фото с отступами сверху и снизу (чтобы не задевать края UV)
+        let drawWidth = canvas.width * 0.40;
         let drawHeight = drawWidth / imgAspect;
 
-        if (drawHeight > canvas.height * 0.45) {
-          drawHeight = canvas.height * 0.45;
+        if (drawHeight > canvas.height * 0.40) {
+          drawHeight = canvas.height * 0.40;
           drawWidth = drawHeight * imgAspect;
         }
 
+        // Оставляем гарантированные чистые поля
         const x = (canvas.width - drawWidth) / 2;
         const y = (canvas.height - drawHeight) / 2;
 
