@@ -122,16 +122,15 @@
     const bodyTexture = new THREE.CanvasTexture(canvas);
     bodyTexture.colorSpace = THREE.SRGBColorSpace;
     bodyTexture.flipY = false;
-    
-    // Запрещаем текстуре таплиться / повторяться по краям
     bodyTexture.wrapS = THREE.ClampToEdgeWrapping;
     bodyTexture.wrapT = THREE.ClampToEdgeWrapping;
 
+    // Изолированный чистый материал для Details
     const detailsMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(currentColorHex),
-      roughness: 0.35,
-      metalness: 0.05,
-      side: THREE.DoubleSide
+      roughness: 0.25,
+      metalness: 0.0,
+      side: THREE.FrontSide
     });
 
     init();
@@ -176,6 +175,7 @@
       // Models Loader
       const loader = new THREE.GLTFLoader();
 
+      // Загрузка Body
       loader.load('Body.glb', (gltf) => {
         bodyMesh = gltf.scene;
         bodyMesh.traverse((child) => {
@@ -189,6 +189,7 @@
         updateCanvasTexture();
       });
 
+      // Загрузка Details (чистый цвет, без карт)
       loader.load('Details.glb', (gltf) => {
         detailsMesh = gltf.scene;
         detailsMesh.traverse((child) => {
@@ -259,14 +260,12 @@
     }
 
     function updateCanvasTexture() {
-      // Полная заливка Canvas фоновым цветом
       ctx.fillStyle = currentColorHex;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       if (uploadedImage) {
         const imgAspect = uploadedImage.width / uploadedImage.height;
         
-        // Масштабируем фото с отступами сверху и снизу (чтобы не задевать края UV)
         let drawWidth = canvas.width * 0.40;
         let drawHeight = drawWidth / imgAspect;
 
@@ -275,7 +274,6 @@
           drawWidth = drawHeight * imgAspect;
         }
 
-        // Оставляем гарантированные чистые поля
         const x = (canvas.width - drawWidth) / 2;
         const y = (canvas.height - drawHeight) / 2;
 
