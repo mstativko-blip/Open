@@ -114,19 +114,23 @@
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
 
-    // Создаем Canvas для динамической отрисовки текстуры
+    // Создаем Canvas ТОЛЬКО для Body
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 2048;
     const ctx = canvas.getContext('2d');
     
-    const dynamicTexture = new THREE.CanvasTexture(canvas);
-    dynamicTexture.colorSpace = THREE.SRGBColorSpace;
-    dynamicTexture.flipY = false;
+    const bodyTexture = new THREE.CanvasTexture(canvas);
+    bodyTexture.colorSpace = THREE.SRGBColorSpace;
+    bodyTexture.flipY = false;
 
-    // Разворачиваем текстуру на 180 градусов и ставим в центр
-    dynamicTexture.center.set(0.5, 0.5);
-    dynamicTexture.rotation = Math.PI; 
+    // Изолированный материал для деталей (без текстурных карт вообще)
+    const detailsMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(currentColorHex),
+      roughness: 0.35,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    });
 
     init();
 
@@ -170,12 +174,12 @@
       // Models Loader
       const loader = new THREE.GLTFLoader();
 
+      // Загружаем Body (только сюда идет текстура с лого)
       loader.load('Body.glb', (gltf) => {
         bodyMesh = gltf.scene;
         bodyMesh.traverse((child) => {
           if (child.isMesh) {
-            // Привязываем нашу динамическую текстуру прямо к родному материалу из Blender
-            child.material.map = dynamicTexture;
+            child.material.map = bodyTexture;
             child.material.side = THREE.DoubleSide;
             child.material.needsUpdate = true;
           }
@@ -184,11 +188,12 @@
         updateCanvasTexture();
       });
 
+      // Загружаем Details (строго без логотипа)
       loader.load('Details.glb', (gltf) => {
         detailsMesh = gltf.scene;
         detailsMesh.traverse((child) => {
           if (child.isMesh) {
-            child.material.side = THREE.DoubleSide;
+            child.material = detailsMaterial;
           }
         });
         scene.add(detailsMesh);
@@ -201,6 +206,10 @@
           document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
           e.target.classList.add('active');
           currentColorHex = e.target.getAttribute('data-color');
+          
+          // Обновляем цвет чистых деталей
+          detailsMaterial.color.set(currentColorHex);
+          
           updateCanvasTexture();
         });
       });
@@ -252,11 +261,11 @@
     }
 
     function updateCanvasTexture() {
-      // 1. Заливаем фоновым цветом
+      // Заливаем фон Body цветом
       ctx.fillStyle = currentColorHex;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Рисуем логотип
+      // Рисуем логотип ровно без переворотов
       if (uploadedImage) {
         const imgAspect = uploadedImage.width / uploadedImage.height;
         let drawWidth = canvas.width * 0.45;
@@ -273,17 +282,7 @@
         ctx.drawImage(uploadedImage, x, y, drawWidth, drawHeight);
       }
 
-      // 3. Обновляем цвет мелких деталей (Details)
-      if (detailsMesh) {
-        detailsMesh.traverse((child) => {
-          if (child.isMesh && child.material) {
-            child.material.color.set(currentColorHex);
-            child.material.needsUpdate = true;
-          }
-        });
-      }
-
-      dynamicTexture.needsUpdate = true;
+      bodyTexture.needsUpdate = true;
     }
 
     function onWindowResize() {
