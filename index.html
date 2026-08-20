@@ -271,11 +271,11 @@
       if (uploadedImage) {
         const imgAspect = uploadedImage.width / uploadedImage.height;
         
-        let drawWidth = canvas.width * 0.40;
+        let drawWidth = canvas.width * 0.35;
         let drawHeight = drawWidth / imgAspect;
 
-        if (drawHeight > canvas.height * 0.40) {
-          drawHeight = canvas.height * 0.40;
+        if (drawHeight > canvas.height * 0.35) {
+          drawHeight = canvas.height * 0.35;
           drawWidth = drawHeight * imgAspect;
         }
 
