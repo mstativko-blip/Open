@@ -90,7 +90,6 @@
   <div id="canvas-container"></div>
 
   <div id="ui-panel">
-    <!-- Presets: White, Black, Red, Yellow, Green, Bright Orange -->
     <div class="color-palette">
       <div class="color-btn active" style="background-color: #ffffff;" data-color="#ffffff"></div>
       <div class="color-btn" style="background-color: #111111;" data-color="#111111"></div>
@@ -100,7 +99,6 @@
       <div class="color-btn" style="background-color: #ff6b00;" data-color="#ff6b00"></div>
     </div>
 
-    <!-- Actions Row -->
     <div class="actions-row">
       <label class="btn" for="imageLoader">Upload Logo</label>
       <input type="file" id="imageLoader" accept="image/*">
@@ -115,17 +113,20 @@
     let detailsMesh = null;
     let uploadedImage = null;
     let currentColorHex = '#ffffff';
-    
-    let bodyMaterial = null;
-    let detailsMaterial = null;
 
+    // Создаем Canvas для динамической отрисовки текстуры
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 2048;
     const ctx = canvas.getContext('2d');
+    
     const dynamicTexture = new THREE.CanvasTexture(canvas);
     dynamicTexture.colorSpace = THREE.SRGBColorSpace;
     dynamicTexture.flipY = false;
+
+    // Разворачиваем текстуру на 180 градусов и ставим в центр
+    dynamicTexture.center.set(0.5, 0.5);
+    dynamicTexture.rotation = Math.PI; 
 
     init();
 
@@ -166,28 +167,18 @@
       backLight.position.set(0, -6, -5);
       scene.add(backLight);
 
-      // Base Materials
-      bodyMaterial = new THREE.MeshStandardMaterial({
-        map: dynamicTexture,
-        roughness: 0.35,
-        metalness: 0.05,
-        side: THREE.DoubleSide
-      });
-
-      detailsMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(currentColorHex),
-        roughness: 0.35,
-        metalness: 0.05,
-        side: THREE.DoubleSide
-      });
-
       // Models Loader
       const loader = new THREE.GLTFLoader();
 
       loader.load('Body.glb', (gltf) => {
         bodyMesh = gltf.scene;
         bodyMesh.traverse((child) => {
-          if (child.isMesh) child.material = bodyMaterial;
+          if (child.isMesh) {
+            // Привязываем нашу динамическую текстуру прямо к родному материалу из Blender
+            child.material.map = dynamicTexture;
+            child.material.side = THREE.DoubleSide;
+            child.material.needsUpdate = true;
+          }
         });
         scene.add(bodyMesh);
         updateCanvasTexture();
@@ -196,7 +187,9 @@
       loader.load('Details.glb', (gltf) => {
         detailsMesh = gltf.scene;
         detailsMesh.traverse((child) => {
-          if (child.isMesh) child.material = detailsMaterial;
+          if (child.isMesh) {
+            child.material.side = THREE.DoubleSide;
+          }
         });
         scene.add(detailsMesh);
         updateCanvasTexture();
@@ -208,8 +201,6 @@
           document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
           e.target.classList.add('active');
           currentColorHex = e.target.getAttribute('data-color');
-          
-          detailsMaterial.color.set(currentColorHex);
           updateCanvasTexture();
         });
       });
@@ -261,9 +252,11 @@
     }
 
     function updateCanvasTexture() {
+      // 1. Заливаем фоновым цветом
       ctx.fillStyle = currentColorHex;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // 2. Рисуем логотип
       if (uploadedImage) {
         const imgAspect = uploadedImage.width / uploadedImage.height;
         let drawWidth = canvas.width * 0.45;
@@ -278,6 +271,16 @@
         const y = (canvas.height - drawHeight) / 2;
 
         ctx.drawImage(uploadedImage, x, y, drawWidth, drawHeight);
+      }
+
+      // 3. Обновляем цвет мелких деталей (Details)
+      if (detailsMesh) {
+        detailsMesh.traverse((child) => {
+          if (child.isMesh && child.material) {
+            child.material.color.set(currentColorHex);
+            child.material.needsUpdate = true;
+          }
+        });
       }
 
       dynamicTexture.needsUpdate = true;
